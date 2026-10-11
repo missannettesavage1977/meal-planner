@@ -235,6 +235,12 @@ export function scoreCandidate(
     reasons.push({ text: `You said you love ${fav}`, weight: 1 });
   }
   if (h.children > 0 && recipe.tags.includes("family-friendly")) preference += 0.15;
+  // Batch-cooking households: favour dishes that keep, early in the week, so leftovers can be planned.
+  const wantsLeftovers = h.batchCooking && h.leftoversPerWeek > state.meals.filter((m) => m.kind === "leftover").length;
+  if (wantsLeftovers && recipe.keepsDays >= 2 && slot !== "breakfast" && !isWeekend(date)) {
+    preference += 0.2;
+    reasons.push({ text: `Keeps ${recipe.keepsDays} days – good for planned leftovers`, weight: 0.35 });
+  }
   const suit = checkSuitability(recipe, h);
   if (suit.warnings.length) preference -= 0.1;
   preference = clamp01(preference);
@@ -417,7 +423,8 @@ export function generatePlan(ctx: PlannerContext, plan: MealPlan, opts: Generate
   const h = ctx.household;
   const rng = mulberry32(ctx.seed ?? 1);
   const allDates = h.planDays.map((d) => addDays(plan.weekStart, d)).sort();
-  const dates = (opts.dates ?? allDates).slice().sort();
+  // By default never plan days that have already passed; explicit date choices are honoured.
+  const dates = (opts.dates ?? allDates.filter((d) => d >= ctx.today)).slice().sort();
   const dateSet = new Set(dates);
   const notes: string[] = [];
   const recipesById = Object.fromEntries(ctx.recipes.map((r) => [r.id, r]));

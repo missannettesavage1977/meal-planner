@@ -18,7 +18,7 @@ export default defineConfig({
   webServer: {
     command: `npm run start -- -p ${PORT}`,
     url: `http://localhost:${PORT}`,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 120_000,
   },
 });

@@ -1,22 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import { computeBudget, shoppingLinesFor, type BudgetSummary } from "../engine/budget";
 import type { ShoppingLine } from "../engine/consolidate";
 import type { MealPlan, ShoppingState } from "../domain/types";
-import { todayISO, weekStartOf } from "../utils/dates";
+import { addDays, daysBetween, todayISO, weekStartOf } from "../utils/dates";
 import { allRecipes, findPlan, priceBookFor, useAppStore } from "./appStore";
 
 /** True once persisted state has been loaded from localStorage. */
 export function useHydrated(): boolean {
-  const [hydrated, setHydrated] = useState(false);
-  useEffect(() => {
-    const p = useAppStore.persist;
-    if (p.hasHydrated()) setHydrated(true);
-    const unsub = p.onFinishHydration(() => setHydrated(true));
-    return unsub;
-  }, []);
-  return hydrated;
+  return useSyncExternalStore(
+    (cb) => useAppStore.persist.onFinishHydration(cb),
+    () => useAppStore.persist.hasHydrated(),
+    () => false,
+  );
 }
 
 const subscribeNoop = () => () => {};
@@ -28,6 +25,21 @@ export function useToday(): string {
 export function useCurrentWeekStart(): string {
   const today = useToday();
   return weekStartOf(today);
+}
+
+/**
+ * The week the user is most likely working on: this week, unless it's nearly over
+ * (or nothing is left to cook) and next week already has a plan.
+ */
+export function useActiveWeekStart(): string {
+  const thisWeek = useCurrentWeekStart();
+  const today = useToday();
+  const plans = useAppStore((s) => s.plans);
+  const thisPlan = plans.find((p) => p.weekStart === thisWeek);
+  const nextPlan = plans.find((p) => p.weekStart === addDays(thisWeek, 7));
+  const nearWeekEnd = daysBetween(today, addDays(thisWeek, 6)) < 2;
+  const thisWeekDone = nearWeekEnd || !thisPlan?.meals.some((m) => m.date >= today && !m.cooked);
+  return thisWeekDone && nextPlan?.meals.length ? nextPlan.weekStart : thisWeek;
 }
 
 export function useRecipes() {
