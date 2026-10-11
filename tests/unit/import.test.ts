@@ -69,3 +69,25 @@ Method
     expect(r.warnings.length).toBeGreaterThan(1);
   });
 });
+
+describe("week request parsing (on-device)", async () => {
+  const { parseWeekRequestLocally, applyWeekRequest } = await import("@/lib/engine/weekRequest");
+  const { DEFAULT_HOUSEHOLD } = await import("@/lib/domain/types");
+
+  it("understands common requests", () => {
+    const r = parseWeekRequestLocally("Cheap veggie meals please, no mushrooms, something Mexican, under 30 mins on weeknights");
+    expect(r.diets).toContain("vegetarian");
+    expect(r.avoid).toContain("mushrooms");
+    expect(r.cuisines).toContain("mexican");
+    expect(r.maxWeeknightMins).toBe(30);
+    expect(r.saveMoney).toBe(true);
+  });
+
+  it("only ever tightens household restrictions", () => {
+    const h = { ...DEFAULT_HOUSEHOLD, allergens: ["peanuts" as const], diets: ["no-pork" as const], weeknightMaxMins: 25 };
+    const applied = applyWeekRequest(h, parseWeekRequestLocally("vegan, under 60 mins"));
+    expect(applied.allergens).toEqual(["peanuts"]);
+    expect(applied.diets).toEqual(expect.arrayContaining(["no-pork", "vegan"]));
+    expect(applied.weeknightMaxMins).toBe(25);
+  });
+});

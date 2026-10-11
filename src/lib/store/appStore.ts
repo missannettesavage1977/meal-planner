@@ -40,6 +40,7 @@ import {
 } from "../engine/planner";
 import { inventoryKey } from "../engine/consolidate";
 import { applySubstitutions } from "../engine/substitutions";
+import { applyWeekRequest, type WeekRequest } from "../engine/weekRequest";
 import { toBase } from "../engine/units";
 import { newId } from "../utils/ids";
 import { todayISO, weekStartOf } from "../utils/dates";
@@ -106,7 +107,7 @@ interface Actions {
   updateHousehold(patch: Partial<Household>): void;
 
   ensurePlan(weekStart: string): MealPlan;
-  generateWeek(weekStart: string, dates?: string[]): ActionResult;
+  generateWeek(weekStart: string, dates?: string[], request?: WeekRequest): ActionResult;
   addMeal(weekStart: string, date: string, slot: MealSlot, recipeId: string): ActionResult;
   replaceMeal(weekStart: string, mealId: string, recipeId: string): ActionResult;
   regenerateMeal(weekStart: string, mealId: string): ActionResult;
@@ -260,11 +261,13 @@ export const useAppStore = create<AppState>()(
           return plan;
         },
 
-        generateWeek(weekStart, dates) {
+        generateWeek(weekStart, dates, request) {
           const s = get();
           const seed = s.seed + 1;
           const plan = findPlan(s.plans, weekStart) ?? emptyPlan(weekStart);
-          const res = generatePlan(plannerContext(s, seed), plan, { dates });
+          const ctx = plannerContext(s, seed);
+          if (request) ctx.household = applyWeekRequest(s.household, request);
+          const res = generatePlan(ctx, plan, { dates });
           set({ plans: upsertPlan(s.plans, res.plan), seed });
           const count = res.plan.meals.filter((m) => !dates || dates.includes(m.date)).length;
           return { ok: count > 0, message: count ? `Planned ${count} meal${count === 1 ? "" : "s"}` : "No meals could be planned", notes: res.notes };
@@ -559,6 +562,9 @@ export const useAppStore = create<AppState>()(
         importData(json) {
           try {
             const raw = JSON.parse(json);
+            const looksLikeBackup =
+              raw && typeof raw === "object" && typeof raw.household === "object" && raw.household !== null && Array.isArray(raw.plans);
+            if (!looksLikeBackup) return { ok: false, message: "That file isn't a valid backup" };
             const parsed = AppDataSchema.parse(migrateData(raw));
             set({ ...parsed });
             return { ok: true, message: "Backup restored" };
@@ -603,7 +609,9 @@ export const useAppStore = create<AppState>()(
 export function migrateData(raw: unknown): unknown {
   if (!raw || typeof raw !== "object") return raw;
   const d = raw as Record<string, unknown>;
-  const household = { ...DEFAULT_HOUSEHOLD, ...(d.household as object | undefined) } as Household;
+  const definedOnly = (o: unknown) =>
+    o && typeof o === "object" ? Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) : {};
+  const household = { ...DEFAULT_HOUSEHOLD, ...definedOnly(d.household) } as Household;
   household.weights = { ...DEFAULT_HOUSEHOLD.weights, ...(household.weights ?? {}) };
   household.priorities = { ...DEFAULT_HOUSEHOLD.priorities, ...(household.priorities ?? {}) };
   return {

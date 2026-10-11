@@ -6,7 +6,6 @@
 -- catalogue, built-in recipes, supermarkets, demo prices) is readable by everyone
 -- and writable only by the service role (migrations / seed).
 
-create extension if not exists pgcrypto;
 
 -- ---------------------------------------------------------------------------
 -- Enums

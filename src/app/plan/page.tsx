@@ -8,6 +8,7 @@ import { Hydrated } from "@/components/Hydrated";
 import { MealCard } from "@/components/plan/MealCard";
 import { MealOptionsSheet } from "@/components/plan/MealOptionsSheet";
 import { RecipePicker } from "@/components/plan/RecipePicker";
+import { WeekRequestBox } from "@/components/plan/WeekRequestBox";
 import { BudgetBar, PriceDisclaimer } from "@/components/shared";
 import { toastResult } from "@/components/toast";
 import { Button, Card, Chip, EmptyState, PageHeader, Sheet } from "@/components/ui";
@@ -180,6 +181,18 @@ function PlanView() {
           </Button>
         )}
       </div>
+
+      {!selecting && (
+        <WeekRequestBox
+          busy={busy}
+          onPlan={(request, summary) =>
+            run(() => {
+              const r = generateWeek(weekStart, undefined, request);
+              toastResult({ ...r, notes: [...summary, ...(r.notes ?? [])] });
+            })
+          }
+        />
+      )}
 
       {selecting && (
         <Card className="mb-5">
